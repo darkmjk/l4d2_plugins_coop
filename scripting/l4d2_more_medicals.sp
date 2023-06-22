@@ -8,7 +8,7 @@ public Plugin myinfo = {
 	description = "L4D2 MultiMedical Plugin",
 	author = "奈",
 	version = "1.3",
-	url = "https://github.com/darkmjk/l4d2_plugins_coop"
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 public void OnPluginStart(){

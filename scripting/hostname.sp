@@ -17,7 +17,7 @@ public Plugin myinfo = {
 	author = "奈",
 	description = "服务器名",
 	version = "1.3",
-	url = "https://github.com/darkmjk/l4d2_plugins_coop"
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)

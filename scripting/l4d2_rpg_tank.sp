@@ -10,7 +10,7 @@ public Plugin myinfo =
     author      = "奈",
     description = "惩罚没事输入!rpg的人",
     version     = "final",
-    url         = "https://github.com/darkmjk/l4d2_plugins_coop"
+    url         = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 public void OnPluginStart()

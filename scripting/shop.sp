@@ -21,7 +21,7 @@ public Plugin myinfo =
 	author = "奈", 
 	description = "商店", 
 	version = "2.1", 
-	url = "https://github.com/darkmjk/l4d2_plugins_coop" 
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
 public void OnPluginStart() 

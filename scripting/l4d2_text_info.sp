@@ -20,7 +20,7 @@ public Plugin myinfo =
     author      = "奈",
     description = "服务器信息查询",
     version     = "1.0",
-    url         = "https://github.com/darkmjk/l4d2_plugins_coop"
+    url         = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 public void OnPluginStart()

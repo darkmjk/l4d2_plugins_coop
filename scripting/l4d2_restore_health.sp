@@ -13,7 +13,7 @@ public Plugin myinfo =
 	author = "奈",
 	description = "过关所有人回满血",
 	version = "1.0",
-	url = "https://github.com/darkmjk/l4d2_restore_health"
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 

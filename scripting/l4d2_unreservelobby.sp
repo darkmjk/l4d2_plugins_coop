@@ -9,7 +9,7 @@ public Plugin myinfo = {
 	author = "奈",
 	description = "有人连接进入服务器自动关闭匹配",
 	version = "1.1",
-	url = "https://github.com/darkmjk/l4d2_plugins_coop"
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
 public void OnPluginStart()

@@ -8,7 +8,7 @@ public Plugin myinfo =
 	author = "奈",
 	description = "回合开始发包药",
 	version = "1.1",
-	url = "https://github.com/darkmjk/l4d2_plugins_coop"
+	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 }
 
 public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
