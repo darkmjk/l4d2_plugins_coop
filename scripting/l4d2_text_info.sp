@@ -38,6 +38,7 @@ public void OnAllPluginsLoaded()
 	cv_Rhp = FindConVar("ss_health");
 	cv_Siammoregain = FindConVar("ss_siammoregain");
 	cv_Restore = FindConVar("l4d2_restore_health_flag");
+	ServerCommand("exec vt_cfg/bantank.cfg");
 }
 
 public void OnConfigsExecuted()
