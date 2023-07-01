@@ -4,6 +4,7 @@
 
 ConVar
 	cv_Weapon,
+	cv_WeaponReplace,
 	cv_Rhp,
 	cv_Restore,
 	cv_Siammoregain;
@@ -19,7 +20,7 @@ public Plugin myinfo =
     name        = "!xx查询信息",
     author      = "奈",
     description = "服务器信息查询",
-    version     = "1.0",
+    version     = "1.1",
     url         = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
@@ -27,10 +28,12 @@ public void OnPluginStart()
 {
 	RegConsoleCmd("sm_xx", Status);
 	
-	cv_Weapon = CreateConVar("SetWeapon", "0", "设置武器伤害", 0, false, 0.0, false, 0.0);
+	cv_Weapon = CreateConVar("l4d2_weapon_damage", "0", "设置武器伤害", 0, false, 0.0, false, 0.0);
+	cv_WeaponReplace = CreateConVar("l4d2_weapon_replace", "0", "开启大小枪");
 
 	Weapon = GetConVarInt(cv_Weapon);
 	HookConVarChange(cv_Weapon, CvarWeapon);
+	HookConVarChange(cv_WeaponReplace, CvarWeaponReplace);
 }
 
 public void OnAllPluginsLoaded()
@@ -77,6 +80,18 @@ public void CvarWeapon(ConVar convar, const char[] oldValue, const char[] newVal
 	else if (Weapon == 2)
 	{
 		ServerCommand("exec vt_cfg/weapon/AnneHappyPlus.cfg");
+	}
+}
+public void CvarWeaponReplace(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if (cv_WeaponReplace.BoolValue)
+	{
+		ServerCommand("exec vt_cfg/weaponreplace.cfg");
+		ServerCommand("sm_restartmap");
+	}
+	else
+	{
+		ServerCommand("l4d2_resetweaponrules");
 	}
 }
 public void CvarRestore( ConVar convar, const char[] oldValue, const char[] newValue ) 
