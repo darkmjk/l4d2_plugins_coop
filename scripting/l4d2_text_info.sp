@@ -28,8 +28,8 @@ public void OnPluginStart()
 {
 	RegConsoleCmd("sm_xx", Status);
 	
-	cv_Weapon = CreateConVar("l4d2_weapon_damage", "0", "设置武器伤害", 0, false, 0.0, false, 0.0);
-	cv_WeaponReplace = CreateConVar("l4d2_weapon_replace", "0", "开启大小枪");
+	cv_Weapon = CreateConVar("WeaponDamage", "0", "设置武器伤害", 0, false, 0.0, false, 0.0);
+	cv_WeaponReplace = CreateConVar("WeaponReplace", "0", "开启大小枪");
 
 	Weapon = GetConVarInt(cv_Weapon);
 	HookConVarChange(cv_Weapon, CvarWeapon);
