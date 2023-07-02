@@ -155,11 +155,13 @@ public Action SwitchShop(int client, int args)
 		if(b_Disable)
 		{
 			PrintToChat(client, "\x04[武器]\x03商店已关闭,打开请输入\x04!shop on");
-		}else
+		}
+		else
 		{
 			PrintToChat(client, "\x04[武器]\x03商店已开启,关闭请输入\x04!shop off");
 		}
-	}else if(args == 1)
+	}
+	else if(args == 1)
 	{
 		GetCmdArg(1, info, sizeof(info));
 		if (strcmp(info, "on", false) == 0)
@@ -171,7 +173,8 @@ public Action SwitchShop(int client, int args)
 		{
 			b_Disable = true;
 			PrintToChatAll("\x04[武器]\x03管理员关闭商店");
-		}else
+		}
+		else
 		{
 			PrintToChat(client, "\x04[武器]\x03请输入正确的命令!");
 		}
