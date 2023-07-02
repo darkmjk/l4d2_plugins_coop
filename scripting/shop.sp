@@ -4,7 +4,7 @@
 #include <sourcemod> 
 #include <sdktools>
 
-#define SURPLUS 	i_MaxWeapon-ClientWeapon[client]
+#define SURPLUS(%1) 	i_MaxWeapon-ClientWeapon[%1]
  
 ConVar cv_MaxWeapon, cv_AmmoTime, cv_Disable; 
 KeyValues kv;
@@ -231,7 +231,7 @@ public int ShowMenuDetail(Menu menu, MenuAction action, int client, int num)
 public void WeaponMenu(int client) 
 {
 	Menu menu = new Menu(WeaponMenu_back);
-	menu.SetTitle("白嫖武器(剩余:%d次)\n------------------",SURPLUS);
+	menu.SetTitle("白嫖武器(剩余:%d次)\n------------------",SURPLUS(client));
 	menu.AddItem("weapon1", "铁喷");
 	menu.AddItem("weapon2", "木喷");
 	menu.AddItem("weapon3", "消音冲锋枪");
@@ -293,7 +293,7 @@ public int WeaponMenu_back(Menu menu, MenuAction action, int client, int num)
 public void MeleeMenu(int client) 
 { 
 	Menu menu = new Menu(MeleeMenu_back);
-	menu.SetTitle("白嫖近战(剩余:%d次)\n------------------",SURPLUS);
+	menu.SetTitle("白嫖近战(剩余:%d次)\n------------------",SURPLUS(client));
 	menu.AddItem("melee1", "砍刀");
 	menu.AddItem("melee2", "消防斧");
 	menu.AddItem("melee3", "小刀");
@@ -379,7 +379,7 @@ public int MeleeMenu_back(Menu menu, MenuAction action, int client, int num)
 void PrintWeaponName(int client, int i, bool isWeapon = true)
 {
 	ClientWeapon[client]++;
-	PrintToChat(client, "\x04[武器]\x05白嫖\x03%s\x05成功,还剩\x04%d\x05次", isWeapon?WeaponName[i]:MeleeName[i], SURPLUS);
+	PrintToChat(client, "\x04[武器]\x05白嫖\x03%s\x05成功,还剩\x04%d\x05次", isWeapon?WeaponName[i]:MeleeName[i], SURPLUS(client));
 }
 
 //出门近战选择菜单
