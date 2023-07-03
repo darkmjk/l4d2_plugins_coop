@@ -5,28 +5,26 @@
 #include <sdktools>
 
 #define SURPLUS(%1) 	i_MaxWeapon-ClientWeapon[%1]
- 
+
+Database sqlite;
 ConVar cv_MaxWeapon, cv_AmmoTime, cv_Disable; 
-KeyValues kv;
 bool b_Disable;
 float f_AmmoTime, ClientAmmoTime[MAXPLAYERS + 1];
 int i_MaxWeapon, ClientWeapon[MAXPLAYERS + 1], ClientMelee[MAXPLAYERS + 1];
 char WeaponName[][] = {"铁喷", "木喷", "消音冲锋枪", "冲锋枪", "马格南", "普通小手枪"};
 char MeleeName[][] = {"暂无", "砍刀", "消防斧", "小刀", "武士刀", "马格南", "电吉他", "警棍", "平底锅", "撬棍", "草叉", "铲子", "普通小手枪"};
-char filePath[PLATFORM_MAX_PATH];
 
 public Plugin myinfo =  
 { 
 	name = "[L4D2]Shop", 
 	author = "奈", 
-	description = "商店(本地文本控制)", 
-	version = "2.1", 
+	description = "商店(数据库版本)", 
+	version = "1.0.1", 
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
 public void OnPluginStart() 
 { 
-	loadFile();
 	RegConsoleCmd("sm_gw", ShowMenu, "商店菜单"); 
 	RegConsoleCmd("sm_buy", ShowMenu, "商店菜单");
 
@@ -48,6 +46,9 @@ public void OnPluginStart()
 	HookConVarChange(cv_MaxWeapon, CvarChanged);
 	HookConVarChange(cv_AmmoTime, CvarChanged);
 	getCvar();
+	if(!sqlite)
+		InitSQLite();
+	SQL_LoadAll();
 }  
 
 void CvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -67,52 +68,97 @@ void getCvar()
 	f_AmmoTime = GetConVarFloat(cv_AmmoTime);
 }
 
+void InitSQLite() 
+{	
+	char sError[1024];
+	if (!(sqlite = SQLite_UseDatabase("ShopSystem", sError, sizeof sError)))
+		SetFailState("Could not connect to the database \"ShopSystem\" at the following error:\n%s", sError);
+
+	SQL_FastQuery(sqlite, "CREATE TABLE IF NOT EXISTS Select_Melee(SteamID NVARCHAR(32) NOT NULL DEFAULT '', Select_Id INT NOT NULL DEFAULT 0);");
+}
+
+void SQL_LoadAll() 
+{
+	for (int i = 1; i <= MaxClients; i++) {
+		if (IsClientInGame(i) && !IsFakeClient(i)) {
+			SQL_Load(i);
+		}
+	}
+}
+
+void SQL_SaveAll() 
+{
+	for (int i = 1; i <= MaxClients; i++) {
+		if (IsClientInGame(i) && !IsFakeClient(i))
+			SQL_Save(i);
+	}
+}
+
+void SQL_Load(int client) 
+{
+	if (!sqlite)
+		return;
+
+	char query[1024];
+	FormatEx(query, sizeof query, "SELECT Select_Id FROM Select_Melee WHERE SteamID = '%s';", GetSteamId(client));
+	sqlite.Query(SQL_CallbackLoad, query, GetClientUserId(client));
+}
+
+void SQL_Save(int client)
+{
+	if (!sqlite)
+		return;
+
+	char query[1024];
+	FormatEx(query, sizeof query, "UPDATE Select_Melee SET Select_Id = %d WHERE SteamID = '%s';", ClientMelee[client], GetSteamId(client));
+	SQL_FastQuery(sqlite, query);
+}
+
+void SQL_CallbackLoad(Database db, DBResultSet results, const char[] error, any data) 
+{
+	if (!db || !results) {
+		LogError(error);
+		return;
+	}
+
+	int client;
+	if (!(client = GetClientOfUserId(data)))
+		return;
+
+	if (results.FetchRow())
+		ClientMelee[client] = results.FetchInt(0);
+	else {
+		char query[1024];
+		FormatEx(query, sizeof query, "INSERT INTO Select_Melee(SteamID, Select_Id) VALUES ('%s', %d);", GetSteamId(client), ClientMelee[client]);
+		SQL_FastQuery(sqlite, query);
+	}
+
+}
+
+public void OnPluginEnd() 
+{
+	SQL_SaveAll();
+}
+
+char[] GetSteamId(int client)
+{
+	char id[32];
+	GetClientAuthId(client, AuthId_Engine, id, sizeof(id), true);
+	return id;
+}
+
 public void OnClientPutInServer(int client)
 {
 	if(!IsFakeClient(client))
-	{
-		ClientSaveToFileLoad(client);	
-	}
+		SQL_Load(client);
+
 	ClientAmmoTime[client] = 0.0;
 }
 
 public void OnClientDisconnect(int client)
 {
 	if(!IsFakeClient(client))
-	{
-		ClientSaveToFileSave(client);
-	}
-}
-
-public void loadFile()
-{
-	kv = new KeyValues("ClientMelee");
-	BuildPath(Path_SM, filePath, sizeof(filePath), "data/Melee.txt");
-	if (FileExists(filePath))
-		FileToKeyValues(kv, filePath);
-	else
-		KeyValuesToFile(kv, filePath);
-}
-
-public void ClientSaveToFileSave(int client)
-{
-	char user_id[128];
-	GetClientAuthId(client, AuthId_Engine, user_id, sizeof(user_id), true);
-	KvJumpToKey(kv, user_id, true);
-	KvSetNum(kv, "Melee", ClientMelee[client]);
-	KvGoBack(kv);
-	KvRewind(kv);
-	KeyValuesToFile(kv, filePath);
-}
-
-public void ClientSaveToFileLoad(int client)
-{
-	char user_id[128];
-	GetClientAuthId(client, AuthId_Engine, user_id, sizeof(user_id), true);
-	KvJumpToKey(kv, user_id, true);
-	ClientMelee[client] = KvGetNum(kv, "Melee", 0);
-	KvGoBack(kv);
-	KvRewind(kv);
+		SQL_Save(client);
 }
 
 //玩家死亡重置次数
@@ -421,66 +467,79 @@ public int MeleeSelect_back(Menu menu, MenuAction action, int client, int num)
 			case 0://清除武器
 			{
 				ClientMelee[client]=0;
+				SQL_Save(client);
 				PrintToChat(client,"\x04[武器]\x03出门近战武器设置已清除");
 			}
 			case 1://砍刀
 			{
 				ClientMelee[client]=1;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 2://消防斧
 			{
 				ClientMelee[client]=2;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 3://小刀
 			{
 				ClientMelee[client]=3;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 4://武士刀
 			{
 				ClientMelee[client]=4;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 5://马格南
 			{
 				ClientMelee[client]=5;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 6://电吉他
 			{
 				ClientMelee[client]=6;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 7://警棍
 			{
 				ClientMelee[client]=7;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 8://平底锅
 			{
 				ClientMelee[client]=8;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 9://撬棍
 			{
 				ClientMelee[client]=9;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 10://草叉
 			{
 				ClientMelee[client]=10;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 11://铲子
 			{
 				ClientMelee[client]=11;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 			case 12://普通小手枪
 			{
 				ClientMelee[client]=12;
+				SQL_Save(client);
 				PrintMeleeSelect(client);
 			}
 		}

@@ -18,9 +18,10 @@
 !buy !gw打开商店面板  
 !chr快速选铁喷，!pum快速选木喷，!uzi快速选uzi，!smg快速选smg  
 !ammo补充后备弹夹，cvar设置多长时间补充一次  
-增加出门近战发放，读取steamid写入文件，再次进服自动加载之前选择  
+增加出门近战发放，读取steamid写入data/melee.txt文件，再次进服自动加载之前选择  
 增加一个cvar控制开关商店  
 2.0新增管理员指令开关商店，!shop off关闭商店，!shop on打开商店，!shop查看当前商店开关情况  
-2.1新增白嫖近战菜单  
+2.1新增白嫖近战菜单
++ **shop2** 采用sqlite数据库保存数据，功能和shop一样
 + **vote** Anne的投票加载cfg和指令，删除数据库相关功能，仅保留投票和踢人
 + **witch_damage_announce** zonemod的witch伤害提示，和上面tank提示一起使用，配色统一
