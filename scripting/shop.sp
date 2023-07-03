@@ -40,7 +40,7 @@ public void OnPluginStart()
 
 	cv_Disable = CreateConVar("l4d2_shop_disable", "0", "商店开关");
 	cv_MaxWeapon = CreateConVar("l4d2_weapon_number", "2", "每关单人可用上限", FCVAR_NOTIFY);
-	cv_AmmoTime = CreateConVar("l4d2_give_ammo_time", "180.0", "补充子弹的最小间隔时间");
+	cv_AmmoTime = CreateConVar("l4d2_give_ammo_time", "180.0", "补充子弹的最小间隔时间,小于0.0关闭功能");
 	HookEvent("round_start", Event_Reset, EventHookMode_Pre);
 	HookEvent("mission_lost", Event_Reset, EventHookMode_Post);
 	HookEvent("player_death", Event_player_death, EventHookMode_Post);
@@ -578,6 +578,11 @@ public Action GiveAmmo(int client, int args)
 	if(b_Disable)
 	{
 		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		return Plugin_Handled;
+	}
+	if(f_AmmoTime < 0.0)
+	{
+		PrintToChat(client, "\x04[武器]\x03补充子弹已关闭");
 		return Plugin_Handled;
 	}
 	if (GetClientTeam(client) == 2 && !NoValidPlayer(client))
