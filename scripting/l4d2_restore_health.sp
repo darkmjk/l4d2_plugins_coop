@@ -45,7 +45,7 @@ void RestoreHealth()
 			if(!IsPlayerAlive(client))
 			{
 				L4D_RespawnPlayer(client);
-				Teleport(client);
+				TeleportClient(client);
 			}
 				
 				
@@ -60,7 +60,7 @@ void RestoreHealth()
 	}
 }
 
-void Teleport(int client)
+void TeleportClient(int client)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -70,6 +70,7 @@ void Teleport(int client)
 			ForceCrouch(client);
 			GetClientAbsOrigin(i, Origin);
 			TeleportEntity(client, Origin, NULL_VECTOR, NULL_VECTOR);
+			break;
 		}
 	}
 }
