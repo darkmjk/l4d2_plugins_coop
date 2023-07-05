@@ -4,22 +4,30 @@
 #include <sourcemod> 
 #include <sdktools>
 
-#define SURPLUS(%1) 	i_MaxWeapon-ClientWeapon[%1]
+#define SURPLUS(%1) 	i_MaxWeapon-player[%1].ClientWeapon
 
+enum struct PlayerStruct{
+	int ClientWeapon;
+	int ClientMelee;
+	int ClientPoint;
+	float ClientAmmoTime;
+}
+PlayerStruct player[MAXPLAYERS + 1];
 Database sqlite;
-ConVar cv_MaxWeapon, cv_AmmoTime, cv_Disable; 
-bool b_Disable;
-float f_AmmoTime, ClientAmmoTime[MAXPLAYERS + 1];
-int i_MaxWeapon, ClientWeapon[MAXPLAYERS + 1], ClientMelee[MAXPLAYERS + 1];
+ConVar cv_MaxPoint, cv_MaxWeapon, cv_AmmoTime, cv_Disable, cv_Medical; 
+bool b_Disable, b_Medical;
+float f_AmmoTime;
+int i_MaxPoint, i_MaxWeapon;
 char WeaponName[][] = {"铁喷", "木喷", "消音冲锋枪", "冲锋枪", "马格南", "普通小手枪"};
 char MeleeName[][] = {"暂无", "砍刀", "消防斧", "小刀", "武士刀", "马格南", "电吉他", "警棍", "平底锅", "撬棍", "草叉", "铲子", "普通小手枪"};
+
 
 public Plugin myinfo =  
 { 
 	name = "[L4D2]Shop", 
 	author = "奈", 
 	description = "商店(数据库版本)", 
-	version = "1.0.1", 
+	version = "1.1.1", 
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
@@ -37,13 +45,16 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_uzi", GiveUzi, "快速选uzi");
 
 	cv_Disable = CreateConVar("l4d2_shop_disable", "0", "商店开关");
+	cv_Medical = CreateConVar("l4d2_medical_enable", "1", "医疗物品购买开关");
 	cv_MaxWeapon = CreateConVar("l4d2_weapon_number", "2", "每关单人可用上限", FCVAR_NOTIFY);
+	cv_MaxPoint = CreateConVar("l4d2_max_point", "10", "获取点数上限", FCVAR_NOTIFY);
 	cv_AmmoTime = CreateConVar("l4d2_give_ammo_time", "180.0", "补充子弹的最小间隔时间,小于0.0关闭功能");
 	HookEvent("round_start", Event_Reset, EventHookMode_Pre);
 	HookEvent("mission_lost", Event_Reset, EventHookMode_Post);
-	HookEvent("player_death", Event_player_death, EventHookMode_Post);
+	HookEvent("finale_win", Event_RewardMedical, EventHookMode_Pre);
 	HookConVarChange(cv_Disable, CvarChanged);
 	HookConVarChange(cv_MaxWeapon, CvarChanged);
+	HookConVarChange(cv_MaxPoint, CvarChanged);
 	HookConVarChange(cv_AmmoTime, CvarChanged);
 	getCvar();
 	if(!sqlite)
@@ -64,7 +75,9 @@ public void OnConfigsExecuted()
 void getCvar()
 {
 	b_Disable = GetConVarBool(cv_Disable);
+	b_Medical = GetConVarBool(cv_Medical);
 	i_MaxWeapon = GetConVarInt(cv_MaxWeapon);
+	i_MaxPoint = GetConVarInt(cv_MaxPoint);
 	f_AmmoTime = GetConVarFloat(cv_AmmoTime);
 }
 
@@ -74,7 +87,7 @@ void InitSQLite()
 	if (!(sqlite = SQLite_UseDatabase("ShopSystem", sError, sizeof sError)))
 		SetFailState("Could not connect to the database \"ShopSystem\" at the following error:\n%s", sError);
 
-	SQL_FastQuery(sqlite, "CREATE TABLE IF NOT EXISTS Select_Melee(SteamID NVARCHAR(32) NOT NULL DEFAULT '', Select_Id INT NOT NULL DEFAULT 0);");
+	SQL_FastQuery(sqlite, "CREATE TABLE IF NOT EXISTS Shop(SteamID NVARCHAR(32) NOT NULL DEFAULT '', Select_Melee INT NOT NULL DEFAULT 0, Point INT NOT NULL DEFAULT 0);");
 }
 
 void SQL_LoadAll() 
@@ -89,8 +102,10 @@ void SQL_LoadAll()
 void SQL_SaveAll() 
 {
 	for (int i = 1; i <= MaxClients; i++) {
-		if (IsClientInGame(i) && !IsFakeClient(i))
-			SQL_Save(i);
+		if (IsClientInGame(i) && !IsFakeClient(i)){
+			SQL_SaveMelee(i);
+			SQL_SavePoint(i);
+		}		
 	}
 }
 
@@ -100,17 +115,27 @@ void SQL_Load(int client)
 		return;
 
 	char query[1024];
-	FormatEx(query, sizeof query, "SELECT Select_Id FROM Select_Melee WHERE SteamID = '%s';", GetSteamId(client));
+	FormatEx(query, sizeof query, "SELECT Select_Melee, Point FROM Shop WHERE SteamID = '%s';", GetSteamId(client));
 	sqlite.Query(SQL_CallbackLoad, query, GetClientUserId(client));
 }
 
-void SQL_Save(int client)
+void SQL_SaveMelee(int client)
 {
 	if (!sqlite)
 		return;
 
 	char query[1024];
-	FormatEx(query, sizeof query, "UPDATE Select_Melee SET Select_Id = %d WHERE SteamID = '%s';", ClientMelee[client], GetSteamId(client));
+	FormatEx(query, sizeof query, "UPDATE Shop SET Select_Melee = %d WHERE SteamID = '%s';", player[client].ClientMelee, GetSteamId(client));
+	SQL_FastQuery(sqlite, query);
+}
+
+void SQL_SavePoint(int client)
+{
+	if (!sqlite)
+		return;
+
+	char query[1024];
+	FormatEx(query, sizeof query, "UPDATE Shop SET Point = %d WHERE SteamID = '%s';", player[client].ClientPoint, GetSteamId(client));
 	SQL_FastQuery(sqlite, query);
 }
 
@@ -125,11 +150,13 @@ void SQL_CallbackLoad(Database db, DBResultSet results, const char[] error, any 
 	if (!(client = GetClientOfUserId(data)))
 		return;
 
-	if (results.FetchRow())
-		ClientMelee[client] = results.FetchInt(0);
+	if (results.FetchRow()){
+		player[client].ClientMelee = results.FetchInt(0);
+		player[client].ClientPoint = results.FetchInt(1);
+	}
 	else {
 		char query[1024];
-		FormatEx(query, sizeof query, "INSERT INTO Select_Melee(SteamID, Select_Id) VALUES ('%s', %d);", GetSteamId(client), ClientMelee[client]);
+		FormatEx(query, sizeof query, "INSERT INTO Shop(SteamID, Select_Melee, Point) VALUES ('%s', %d, %d);", GetSteamId(client), player[client].ClientMelee, player[client].ClientPoint);
 		SQL_FastQuery(sqlite, query);
 	}
 
@@ -152,29 +179,48 @@ public void OnClientPutInServer(int client)
 	if(!IsFakeClient(client))
 		SQL_Load(client);
 
-	ClientAmmoTime[client] = 0.0;
+	player[client].ClientAmmoTime = 0.0;
 }
 
 public void OnClientDisconnect(int client)
 {
-	if(!IsFakeClient(client))
-		SQL_Save(client);
-}
-
-//玩家死亡重置次数
-public void Event_player_death(Event event, const char []name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	ClientWeapon[client] = 0;
-	ClientAmmoTime[client] = 0.0;
+	if(!IsFakeClient(client)){
+		SQL_SaveMelee(client);
+		SQL_SavePoint(client);
+	}
+		
 }
 
 //回合开始或失败重开重置次数
 public Action Event_Reset(Event event, const char []name, bool dontBroadcast)
 {
 	for(int client = 1; client <= MaxClients; client++){
-		ClientWeapon[client] = 0;
-		ClientAmmoTime[client] = 0.0;
+		player[client].ClientWeapon = 0;
+		player[client].ClientAmmoTime = 0.0;
+	}
+	return Plugin_Continue;
+}
+
+//玩家通关救援奖励1点数
+public Action Event_RewardMedical(Event event, const char []name, bool dontBroadcast)
+{
+	for(int client = 1; client <= MaxClients; client++){
+		if(!NoValidPlayer(client) && GetClientTeam(client) == 2){
+			if(IsPlayerAlive(client))
+			{
+				if(player[client].ClientPoint < i_MaxPoint){
+					player[client].ClientPoint += 1;
+					SQL_SavePoint(client);
+					PrintToChat(client, "\x04[商店]\x03恭喜通关! 获得\x041\x03点数.");
+				}
+				else{
+					PrintToChat(client, "\x04[商店]\x03恭喜通关! 点数到达上限\x04%d\x03,本关不会增加点数.", i_MaxPoint);
+				}
+			}
+			else{
+				PrintToChat(client, "\x04[商店]\x03恭喜通关! 死亡玩家无点数发放.");
+			}
+		}
 	}
 	return Plugin_Continue;
 }
@@ -200,11 +246,11 @@ public Action SwitchShop(int client, int args)
 	{
 		if(b_Disable)
 		{
-			PrintToChat(client, "\x04[武器]\x03商店已关闭,打开请输入\x04!shop on");
+			PrintToChat(client, "\x04[商店]\x03商店已关闭,打开请输入\x04!shop on");
 		}
 		else
 		{
-			PrintToChat(client, "\x04[武器]\x03商店已开启,关闭请输入\x04!shop off");
+			PrintToChat(client, "\x04[商店]\x03商店已开启,关闭请输入\x04!shop off");
 		}
 	}
 	else if(args == 1)
@@ -213,16 +259,16 @@ public Action SwitchShop(int client, int args)
 		if (strcmp(info, "on", false) == 0)
 		{
 			b_Disable = false;
-			PrintToChatAll("\x04[武器]\x03管理员打开商店");
+			PrintToChatAll("\x04[商店]\x03管理员打开商店");
 		}
 		else if (strcmp(info, "off", false) == 0)
 		{
 			b_Disable = true;
-			PrintToChatAll("\x04[武器]\x03管理员关闭商店");
+			PrintToChatAll("\x04[商店]\x03管理员关闭商店");
 		}
 		else
 		{
-			PrintToChat(client, "\x04[武器]\x03请输入正确的命令!");
+			PrintToChat(client, "\x04[商店]\x03请输入正确的命令!");
 		}
 	}
 	return Plugin_Handled;
@@ -233,16 +279,19 @@ public Action ShowMenu(int client, int args)
 {
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if( !NoValidPlayer(client) && GetClientTeam(client) == 2 )
 	{
 		Menu menu = new Menu(ShowMenuDetail);
-		menu.SetTitle("商店菜单\n-----------");
+		menu.SetTitle("商店菜单\n---------------");
 		menu.AddItem("gun", "白嫖武器");
 		menu.AddItem("melee", "白嫖近战");
 		menu.AddItem("meleeSelect", "出门近战");
+		if(b_Medical)
+			menu.AddItem("medical", "医疗物品");
+		menu.AddItem("throw", "投掷物品");
 		menu.Display(client, 20);
 	}
 	return Plugin_Handled;
@@ -269,6 +318,14 @@ public int ShowMenuDetail(Menu menu, MenuAction action, int client, int num)
 			{
 				MeleeSelect(client);
 			}
+			case 3:
+			{
+				MedicalMenu(client);
+			}
+			case 4:
+			{
+				ThrowMenu(client);
+			}
 		}
 	}
 	if (action == MenuAction_End)	
@@ -280,7 +337,7 @@ public int ShowMenuDetail(Menu menu, MenuAction action, int client, int num)
 public void WeaponMenu(int client) 
 {
 	Menu menu = new Menu(WeaponMenu_back);
-	menu.SetTitle("白嫖武器(剩余:%d次)\n------------------",SURPLUS(client));
+	menu.SetTitle("白嫖武器(剩余:%d次)\n---------------------------",SURPLUS(client));
 	menu.AddItem("weapon1", "铁喷");
 	menu.AddItem("weapon2", "木喷");
 	menu.AddItem("weapon3", "消音冲锋枪");
@@ -342,7 +399,7 @@ public int WeaponMenu_back(Menu menu, MenuAction action, int client, int num)
 public void MeleeMenu(int client) 
 { 
 	Menu menu = new Menu(MeleeMenu_back);
-	menu.SetTitle("白嫖近战(剩余:%d次)\n------------------",SURPLUS(client));
+	menu.SetTitle("白嫖近战(剩余:%d次)\n---------------------------",SURPLUS(client));
 	menu.AddItem("melee1", "砍刀");
 	menu.AddItem("melee2", "消防斧");
 	menu.AddItem("melee3", "小刀");
@@ -427,8 +484,140 @@ public int MeleeMenu_back(Menu menu, MenuAction action, int client, int num)
 //白嫖武器后聊天框展示
 void PrintWeaponName(int client, int i, bool isWeapon = true)
 {
-	ClientWeapon[client]++;
-	PrintToChat(client, "\x04[武器]\x05白嫖\x03%s\x05成功,还剩\x04%d\x05次", isWeapon?WeaponName[i]:MeleeName[i], SURPLUS(client));
+	player[client].ClientWeapon++;
+	PrintToChat(client, "\x04[商店]\x05白嫖\x03%s\x05成功,还剩\x04%d\x05次", isWeapon?WeaponName[i]:MeleeName[i], SURPLUS(client));
+}
+
+//医疗物品菜单
+public void MedicalMenu(int client) 
+{
+	Menu menu = new Menu(MedicalMenu_back);
+	menu.SetTitle("点数(剩余:%d)\n---------------------", player[client].ClientPoint);
+	menu.AddItem("pain_pills", "止痛药(1点)");
+	menu.AddItem("adrenaline", "肾上腺素(1点)");
+	menu.AddItem("first_aid_kit", "医疗包(2点)");
+	menu.AddItem("defibrillator", "电击器(2点)");
+	menu.Display(client, 20);
+} 
+
+//医疗物品菜单选择后执行
+public int MedicalMenu_back(Menu menu, MenuAction action, int client, int num)
+{
+	if(judge(client))
+		return 0;
+	if(player[client].ClientPoint == 0){
+		PrintToChat(client, "\x04[商店]\x03点数不足!");
+		return 0;
+	}
+	char info[64];
+	menu.GetItem(num, info, sizeof(info));
+	if (action == MenuAction_Select)
+	{
+		switch (num) 
+		{ 
+			case 0: //止痛药
+			{ 
+				GiveCommand(client, "pain_pills");
+				PrintMedicalName(client, 0);
+			}
+			case 1: //肾上腺素
+			{ 
+				GiveCommand(client, "adrenaline");
+				PrintMedicalName(client, 1);
+			}
+			case 2: //医疗包
+			{ 
+				if(player[client].ClientPoint == 1)
+				{
+					PrintToChat(client, "\x04[商店]\x03点数不足!");
+					return 0;
+				}
+				GiveCommand(client, "first_aid_kit");
+				player[client].ClientPoint--;
+				PrintMedicalName(client, 2);
+			}
+			case 3: //电击器
+			{ 
+				if(player[client].ClientPoint == 1)
+				{
+					PrintToChat(client, "\x04[商店]\x03点数不足!");
+					return 0;
+				}
+				GiveCommand(client, "defibrillator");
+				player[client].ClientPoint--;
+				PrintMedicalName(client, 3);
+			}
+		}
+	}
+	if (action == MenuAction_End)	
+		delete menu;
+	return 0;
+}
+
+//医疗物品聊天框展示
+void PrintMedicalName(int client, int i)
+{
+	char MedicalName[][] = {"止痛药", "肾上腺素", "医疗包", "电击器"};
+	player[client].ClientPoint--;
+	SQL_SavePoint(client);
+	PrintToChat(client, "\x04[商店]\x05购买\x03%s\x05成功,还剩\x04%d\x05点数", MedicalName[i], player[client].ClientPoint);
+}
+
+//投掷物品菜单
+public void ThrowMenu(int client) 
+{
+	Menu menu = new Menu(ThrowMenu_back);
+	menu.SetTitle("点数(剩余:%d)\n---------------------", player[client].ClientPoint);
+	menu.AddItem("molotov", "燃烧瓶(1点)");
+	menu.AddItem("pipe_bomb", "土制炸弹(1点)");
+	menu.AddItem("vomitjar", "胆汁(1点)");
+	menu.Display(client, 20);
+} 
+
+//医疗物品菜单选择后执行
+public int ThrowMenu_back(Menu menu, MenuAction action, int client, int num)
+{
+	if(judge(client))
+		return 0;
+	if(player[client].ClientPoint == 0){
+		PrintToChat(client, "\x04[商店]\x03点数不足!");
+		return 0;
+	}
+	char info[64];
+	menu.GetItem(num, info, sizeof(info));
+	if (action == MenuAction_Select)
+	{
+		switch (num) 
+		{ 
+			case 0: //燃烧瓶
+			{ 
+				GiveCommand(client, "molotov");
+				PrintThrowName(client, 0);
+			}
+			case 1: //土制炸弹
+			{ 
+				GiveCommand(client, "pipe_bomb");
+				PrintThrowName(client, 1);
+			}
+			case 2: //胆汁
+			{ 
+				GiveCommand(client, "vomitjar");
+				PrintThrowName(client, 2);
+			}
+		}
+	}
+	if (action == MenuAction_End)	
+		delete menu;
+	return 0;
+}
+
+//医疗物品聊天框展示
+void PrintThrowName(int client, int i)
+{
+	char ThrowName[][] = {"燃烧瓶", "土制炸弹", "胆汁"};
+	player[client].ClientPoint--;
+	SQL_SavePoint(client);
+	PrintToChat(client, "\x04[商店]\x05购买\x03%s\x05成功,还剩\x04%d\x05点数", ThrowName[i], player[client].ClientPoint);
 }
 
 //出门近战选择菜单
@@ -437,7 +626,7 @@ public void MeleeSelect(int client)
 	if( !NoValidPlayer(client) && GetClientTeam(client) == 2 )
 	{
 		Menu menu = new Menu(MeleeSelect_back);
-		menu.SetTitle("选择出门近战,当前为%s\n-------------",MeleeName[ClientMelee[client]]);
+		menu.SetTitle("选择出门近战,当前为%s\n---------------------------",MeleeName[player[client].ClientMelee]);
 		menu.AddItem("none", "清除武器");
 		menu.AddItem("machete", "砍刀");
 		menu.AddItem("fireaxe", "消防斧");
@@ -466,80 +655,80 @@ public int MeleeSelect_back(Menu menu, MenuAction action, int client, int num)
 		{
 			case 0://清除武器
 			{
-				ClientMelee[client]=0;
-				SQL_Save(client);
-				PrintToChat(client,"\x04[武器]\x03出门近战武器设置已清除");
+				player[client].ClientMelee=0;
+				SQL_SaveMelee(client);
+				PrintToChat(client,"\x04[商店]\x03出门近战武器设置已清除");
 			}
 			case 1://砍刀
 			{
-				ClientMelee[client]=1;
-				SQL_Save(client);
+				player[client].ClientMelee=1;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 2://消防斧
 			{
-				ClientMelee[client]=2;
-				SQL_Save(client);
+				player[client].ClientMelee=2;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 3://小刀
 			{
-				ClientMelee[client]=3;
-				SQL_Save(client);
+				player[client].ClientMelee=3;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 4://武士刀
 			{
-				ClientMelee[client]=4;
-				SQL_Save(client);
+				player[client].ClientMelee=4;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 5://马格南
 			{
-				ClientMelee[client]=5;
-				SQL_Save(client);
+				player[client].ClientMelee=5;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 6://电吉他
 			{
-				ClientMelee[client]=6;
-				SQL_Save(client);
+				player[client].ClientMelee=6;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 7://警棍
 			{
-				ClientMelee[client]=7;
-				SQL_Save(client);
+				player[client].ClientMelee=7;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 8://平底锅
 			{
-				ClientMelee[client]=8;
-				SQL_Save(client);
+				player[client].ClientMelee=8;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 9://撬棍
 			{
-				ClientMelee[client]=9;
-				SQL_Save(client);
+				player[client].ClientMelee=9;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 10://草叉
 			{
-				ClientMelee[client]=10;
-				SQL_Save(client);
+				player[client].ClientMelee=10;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 11://铲子
 			{
-				ClientMelee[client]=11;
-				SQL_Save(client);
+				player[client].ClientMelee=11;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 			case 12://普通小手枪
 			{
-				ClientMelee[client]=12;
-				SQL_Save(client);
+				player[client].ClientMelee=12;
+				SQL_SaveMelee(client);
 				PrintMeleeSelect(client);
 			}
 		}
@@ -552,68 +741,68 @@ public int MeleeSelect_back(Menu menu, MenuAction action, int client, int num)
 //出门近战选择后聊天框展示
 void PrintMeleeSelect(int client)
 {
-	PrintToChat(client,"\x04[武器]\x05出门近战武器设为\x03%s", MeleeName[ClientMelee[client]]);
+	PrintToChat(client,"\x04[商店]\x05出门近战武器设为\x03%s", MeleeName[player[client].ClientMelee]);
 }
 
 //出门发放近战
 public Action Timer_AutoGive(Handle timer, any client)
 {
-	if (ClientMelee[client] == 1)
+	if (player[client].ClientMelee == 1)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "machete");
 	}
-	if (ClientMelee[client] == 2)
+	if (player[client].ClientMelee == 2)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "fireaxe");
 	}
-	if (ClientMelee[client] == 3)
+	if (player[client].ClientMelee == 3)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "knife");
 	}
-	if (ClientMelee[client] == 4)
+	if (player[client].ClientMelee == 4)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "katana");
 	}
-	if (ClientMelee[client] == 5)
+	if (player[client].ClientMelee == 5)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "pistol_magnum");
 	}
-	if (ClientMelee[client] == 6)
+	if (player[client].ClientMelee == 6)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "electric_guitar");
 	}
-	if (ClientMelee[client] == 7)
+	if (player[client].ClientMelee == 7)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "tonfa");
 	}
-	if (ClientMelee[client] == 8)
+	if (player[client].ClientMelee == 8)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "frying_pan");
 	}
-	if (ClientMelee[client] == 9)
+	if (player[client].ClientMelee == 9)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "crowbar");
 	}
-	if (ClientMelee[client] == 10)
+	if (player[client].ClientMelee == 10)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "pitchfork");
 	}
-	if (ClientMelee[client] == 11)
+	if (player[client].ClientMelee == 11)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "shovel");
 	}
-	if (ClientMelee[client] == 12)
+	if (player[client].ClientMelee == 12)
 	{
 		DeleteMelee(client);
 		GiveCommand(client, "pistol");
@@ -636,24 +825,24 @@ public Action GiveAmmo(int client, int args)
 {
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if(f_AmmoTime < 0.0)
 	{
-		PrintToChat(client, "\x04[武器]\x03补充子弹已关闭");
+		PrintToChat(client, "\x04[商店]\x03补充子弹已关闭");
 		return Plugin_Handled;
 	}
 	if (GetClientTeam(client) == 2 && !NoValidPlayer(client))
 	{
-		float fTime = GetEngineTime() - ClientAmmoTime[client] - f_AmmoTime;
+		float fTime = GetEngineTime() - player[client].ClientAmmoTime - f_AmmoTime;
 		if (fTime < 0.0)
 		{
-			PrintToChat(client, "\x04[武器]\x05请等待\x04%.1f\x05秒后补充子弹", FloatAbs(fTime));
+			PrintToChat(client, "\x04[商店]\x05请等待\x04%.1f\x05秒后补充子弹", FloatAbs(fTime));
 			return Plugin_Handled;
 		}
 		GiveCommand(client, "ammo");
-		ClientAmmoTime[client] = GetEngineTime();
+		player[client].ClientAmmoTime = GetEngineTime();
 	}
 	return Plugin_Handled;
 }
@@ -690,13 +879,13 @@ bool judge(int client)
 		
 	if(GetClientTeam(client) != 2) 
 	{ 
-		PrintToChat(client, "\x04[武器]\x03武器菜单仅对生还生效"); 
+		PrintToChat(client, "\x04[商店]\x03武器菜单仅对生还生效"); 
 		return true; 
 	} 
 
-	if(ClientWeapon[client] >= i_MaxWeapon)  
+	if(player[client].ClientWeapon >= i_MaxWeapon)  
 	{ 
-		PrintToChat(client, "\x04[武器]\x03已达到每关白嫖上限"); 
+		PrintToChat(client, "\x04[商店]\x03已达到每关白嫖上限"); 
 		return true; 
 	}
 	return false;
@@ -707,7 +896,7 @@ public Action GiveChr(int client,int args)
 { 
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if(judge(client))
@@ -722,7 +911,7 @@ public Action GivePum(int client,int args)
 { 
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if(judge(client))
@@ -737,7 +926,7 @@ public Action GiveSmg(int client,int args)
 { 
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if(judge(client))
@@ -752,7 +941,7 @@ public Action GiveUzi(int client,int args)
 { 
 	if(b_Disable)
 	{
-		PrintToChat(client, "\x04[武器]\x03商店未开启");
+		PrintToChat(client, "\x04[商店]\x03商店未开启");
 		return Plugin_Handled;
 	}
 	if(judge(client))
