@@ -30,7 +30,7 @@ public void OnPluginStart()
 
 public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	CreateTimer(3.0, MedicalsTimer, _, TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(1.0, MedicalsTimer, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Action MedicalsTimer(Handle Timer)
@@ -117,7 +117,6 @@ void SetMultMed(int mult, bool kit=true)
 	{
 		SetEntCount("weapon_first_aid_kit_spawn", mult);	// 医疗包
 	}
-		
 	else
 	{
 		SetEntCount("weapon_pain_pills_spawn", mult);		// 止痛药
