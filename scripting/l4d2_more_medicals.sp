@@ -10,7 +10,7 @@ public Plugin myinfo =
 	name = "[L4D2]多倍药物",
 	description = "L4D2 MultiMedical Plugin",
 	author = "奈",
-	version = "1.3.3",
+	version = "1.3.6",
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
@@ -22,9 +22,24 @@ public void OnPluginStart()
 	i_MultiMedicalPills = GetConVarInt(cv_MultiMedicalPills);
 	HookConVarChange(cv_MultiMedicalKits, CvarKitChanged);
 	HookConVarChange(cv_MultiMedicalPills, CvarPillChanged);
+	HookEvent("round_start", Event_RoundStart);
 	RegAdminCmd("sm_mmk", Cmd_SetMultKits, ADMFLAG_ROOT, "设置多倍医疗包");
 	RegAdminCmd("sm_mmp", Cmd_SetMultPills, ADMFLAG_ROOT, "设置多倍止痛药和肾上腺素");
 	//AutoExecConfig(true, "l4d2_more_medicals");
+}
+
+public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	CreateTimer(3.0, MedicalsTimer, _, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action MedicalsTimer(Handle Timer)
+{
+	i_MultiMedicalKits = GetConVarInt(cv_MultiMedicalKits);
+	SetMultMed(i_MultiMedicalKits);
+	i_MultiMedicalPills = GetConVarInt(cv_MultiMedicalPills);
+	SetMultMed(i_MultiMedicalPills, false);
+	return Plugin_Continue;
 }
 
 public void CvarKitChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -65,8 +80,8 @@ public Action Cmd_SetMultKits(int client, int args)
 	{
 		char tmp[3];
 		GetCmdArg(1, tmp, sizeof(tmp));
-		i_MultiMedicalKits = StringToInt(tmp);
-		SetConVarInt(cv_MultiMedicalKits, i_MultiMedicalKits, true);
+		int num = StringToInt(tmp);
+		SetConVarInt(cv_MultiMedicalKits, num, true);
 	}
 	return Plugin_Handled;
 }
@@ -81,8 +96,8 @@ public Action Cmd_SetMultPills(int client, int args)
 	{
 		char tmp[3];
 		GetCmdArg(1, tmp, sizeof(tmp));
-		i_MultiMedicalPills = StringToInt(tmp);
-		SetConVarInt(cv_MultiMedicalPills, i_MultiMedicalPills, true);
+		int num = StringToInt(tmp);
+		SetConVarInt(cv_MultiMedicalPills, num, true);
 	}
 	return Plugin_Handled;
 }
