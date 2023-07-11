@@ -11,10 +11,11 @@ enum struct PlayerStruct{
 	int ClientMelee;
 	int ClientPoint;
 	float ClientAmmoTime;
+	bool CanBuyMedical;
 }
 PlayerStruct player[MAXPLAYERS + 1];
 Database sqlite;
-ConVar cv_MaxPoint, cv_MaxWeapon, cv_AmmoTime, cv_Disable, cv_Medical; 
+ConVar cv_GetPoint, cv_MaxPoint, cv_MaxWeapon, cv_AmmoTime, cv_Disable, cv_Medical, cv_DeathReset; 
 bool b_Disable, b_Medical;
 float f_AmmoTime;
 int i_MaxPoint, i_MaxWeapon;
@@ -27,7 +28,7 @@ public Plugin myinfo =
 	name = "[L4D2]Shop", 
 	author = "奈", 
 	description = "商店(数据库版本)", 
-	version = "1.1.1", 
+	version = "1.1.3", 
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
@@ -44,14 +45,17 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_smg", GiveSmg, "快速选smg");
 	RegConsoleCmd("sm_uzi", GiveUzi, "快速选uzi");
 
-	cv_Disable = CreateConVar("l4d2_shop_disable", "0", "商店开关");
-	cv_Medical = CreateConVar("l4d2_medical_enable", "1", "医疗物品购买开关");
-	cv_MaxWeapon = CreateConVar("l4d2_weapon_number", "2", "每关单人可用上限", FCVAR_NOTIFY);
+	cv_Disable = CreateConVar("l4d2_shop_disable", "0", "商店开关 开:0 关:1");
+	cv_Medical = CreateConVar("l4d2_medical_enable", "1", "医疗物品购买开关 开:1 关:0");
+	cv_MaxWeapon = CreateConVar("l4d2_weapon_number", "2", "每关单人可用白嫖武器上限", FCVAR_NOTIFY);
+	cv_GetPoint = CreateConVar("l4d2_get_point", "1", "救援通关获得的点数", FCVAR_NOTIFY);
 	cv_MaxPoint = CreateConVar("l4d2_max_point", "10", "获取点数上限", FCVAR_NOTIFY);
+	cv_DeathReset = CreateConVar("l4d2_reset_buy", "0", "玩家死亡后是否重置白嫖武器次数 开:1 关:0", FCVAR_NOTIFY);
 	cv_AmmoTime = CreateConVar("l4d2_give_ammo_time", "180.0", "补充子弹的最小间隔时间,小于0.0关闭功能");
 	HookEvent("round_start", Event_Reset, EventHookMode_Pre);
 	HookEvent("mission_lost", Event_Reset, EventHookMode_Post);
-	HookEvent("finale_win", Event_RewardMedical, EventHookMode_Pre);
+	HookEvent("finale_win", Event_RewardPoint, EventHookMode_Pre);
+	HookEvent("player_death", Event_player_death, EventHookMode_Post);
 	HookConVarChange(cv_Disable, CvarChanged);
 	HookConVarChange(cv_MaxWeapon, CvarChanged);
 	HookConVarChange(cv_MaxPoint, CvarChanged);
@@ -60,6 +64,8 @@ public void OnPluginStart()
 	if(!sqlite)
 		InitSQLite();
 	SQL_LoadAll();
+	//是否生成cfg文件
+	//AutoExecConfig(true, "ShopSystem");
 }  
 
 void CvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -191,18 +197,31 @@ public void OnClientDisconnect(int client)
 		
 }
 
+//玩家死亡重置次数
+public void Event_player_death(Event event, const char []name, bool dontBroadcast)
+{
+	if(cv_DeathReset.BoolValue)
+	{
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		player[client].ClientWeapon = 0;
+		player[client].ClientAmmoTime = 0.0;
+		player[client].CanBuyMedical = true;
+	}
+}
+
 //回合开始或失败重开重置次数
 public Action Event_Reset(Event event, const char []name, bool dontBroadcast)
 {
 	for(int client = 1; client <= MaxClients; client++){
 		player[client].ClientWeapon = 0;
 		player[client].ClientAmmoTime = 0.0;
+		player[client].CanBuyMedical = true;
 	}
 	return Plugin_Continue;
 }
 
 //玩家通关救援奖励1点数
-public Action Event_RewardMedical(Event event, const char []name, bool dontBroadcast)
+public Action Event_RewardPoint(Event event, const char []name, bool dontBroadcast)
 {
 	for(int client = 1; client <= MaxClients; client++){
 		if(!NoValidPlayer(client) && GetClientTeam(client) == 2){
@@ -211,10 +230,10 @@ public Action Event_RewardMedical(Event event, const char []name, bool dontBroad
 				if(player[client].ClientPoint < i_MaxPoint){
 					player[client].ClientPoint += 1;
 					SQL_SavePoint(client);
-					PrintToChat(client, "\x04[商店]\x03恭喜通关! 获得\x041\x03点数.");
+					PrintToChat(client, "\x04[商店]\x03恭喜通关! 获得\x04 %d \x03点数.", cv_GetPoint.IntValue);
 				}
 				else{
-					PrintToChat(client, "\x04[商店]\x03恭喜通关! 点数到达上限\x04%d\x03,本关不会增加点数.", i_MaxPoint);
+					PrintToChat(client, "\x04[商店]\x03恭喜通关! 点数到达上限\x04 %d \x03点,本关不会增加点数.", i_MaxPoint);
 				}
 			}
 			else{
@@ -517,35 +536,67 @@ public int MedicalMenu_back(Menu menu, MenuAction action, int client, int num)
 		{ 
 			case 0: //止痛药
 			{ 
-				GiveCommand(client, "pain_pills");
-				PrintMedicalName(client, 0);
+				if(player[client].CanBuyMedical)
+				{
+					GiveCommand(client, "pain_pills");
+					PrintMedicalName(client, 0);
+					player[client].CanBuyMedical = false;
+				}
+				else
+				{
+					PrintToChat(client, "\x04[商店]\x03医疗物品每关只能买一次哦!");
+				}
 			}
 			case 1: //肾上腺素
 			{ 
-				GiveCommand(client, "adrenaline");
-				PrintMedicalName(client, 1);
+				if(player[client].CanBuyMedical)
+				{
+					GiveCommand(client, "adrenaline");
+					PrintMedicalName(client, 1);
+					player[client].CanBuyMedical = false;
+				}
+				else
+				{
+					PrintToChat(client, "\x04[商店]\x03医疗物品每关只能买一次哦!");
+				}
 			}
 			case 2: //医疗包
 			{ 
-				if(player[client].ClientPoint == 1)
+				if(player[client].CanBuyMedical)
 				{
-					PrintToChat(client, "\x04[商店]\x03点数不足!");
-					return 0;
+					if(player[client].ClientPoint == 1)
+					{
+						PrintToChat(client, "\x04[商店]\x03点数不足!");
+						return 0;
+					}
+					GiveCommand(client, "first_aid_kit");
+					player[client].ClientPoint--;
+					PrintMedicalName(client, 2);
+					player[client].CanBuyMedical = false;
 				}
-				GiveCommand(client, "first_aid_kit");
-				player[client].ClientPoint--;
-				PrintMedicalName(client, 2);
+				else
+				{
+					PrintToChat(client, "\x04[商店]\x03医疗物品每关只能买一次哦!");
+				}
 			}
 			case 3: //电击器
 			{ 
-				if(player[client].ClientPoint == 1)
+				if(player[client].CanBuyMedical)
 				{
-					PrintToChat(client, "\x04[商店]\x03点数不足!");
-					return 0;
+					if(player[client].ClientPoint == 1)
+					{
+						PrintToChat(client, "\x04[商店]\x03点数不足!");
+						return 0;
+					}
+					GiveCommand(client, "defibrillator");
+					player[client].ClientPoint--;
+					PrintMedicalName(client, 3);
+					player[client].CanBuyMedical = false;
 				}
-				GiveCommand(client, "defibrillator");
-				player[client].ClientPoint--;
-				PrintMedicalName(client, 3);
+				else
+				{
+					PrintToChat(client, "\x04[商店]\x03医疗物品每关只能买一次哦!");
+				}
 			}
 		}
 	}
