@@ -28,7 +28,7 @@ public Plugin myinfo =
 	name = "[L4D2]Shop", 
 	author = "奈", 
 	description = "商店(数据库版本)", 
-	version = "1.1.3", 
+	version = "1.1.4", 
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
@@ -224,7 +224,8 @@ public Action Event_Reset(Event event, const char []name, bool dontBroadcast)
 public Action Event_RewardPoint(Event event, const char []name, bool dontBroadcast)
 {
 	for(int client = 1; client <= MaxClients; client++){
-		if(!NoValidPlayer(client) && GetClientTeam(client) == 2){
+		if(IsClientConnected(client) && IsClientInGame(client) && !IsFakeClient(client) && GetClientTeam(client) == 2)
+		{
 			if(IsPlayerAlive(client))
 			{
 				if(player[client].ClientPoint < i_MaxPoint){
