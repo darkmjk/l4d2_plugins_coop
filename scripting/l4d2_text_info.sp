@@ -7,20 +7,26 @@ ConVar
 	cv_WeaponReplace,
 	cv_Rhp,
 	cv_Restore,
-	cv_Siammoregain;
+	cv_Siammoregain,
+	cv_Kits,
+	cv_Pills,
+	cv_Respawn;
 	
 int
 	Weapon,
 	Rhp,
 	Restore,
-	Siammoregain;
+	Siammoregain,
+	Kits,
+	Pills,
+	Respawn;
 
 public Plugin myinfo = 
 {
     name        = "!xx查询信息",
     author      = "奈",
     description = "服务器信息查询",
-    version     = "1.1",
+    version     = "1.2.1",
     url         = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
@@ -41,6 +47,9 @@ public void OnAllPluginsLoaded()
 	cv_Rhp = FindConVar("ss_health");
 	cv_Siammoregain = FindConVar("ss_siammoregain");
 	cv_Restore = FindConVar("l4d2_restore_health_flag");
+	cv_Kits = FindConVar("l4d2_multi_medical_kits");
+	cv_Pills = FindConVar("l4d2_multi_medical_pills");
+	cv_Respawn = FindConVar("l4d2_respawn_number");
 	ServerCommand("exec vt_cfg/bantank.cfg");
 }
 
@@ -48,21 +57,41 @@ public void OnConfigsExecuted()
 {
 	if(cv_Rhp != null){
 		cv_Rhp.AddChangeHook(CvarRhp);
-	}else if(FindConVar("ss_health")){
+	}
+	else if(FindConVar("ss_health")){
 		cv_Rhp = FindConVar("ss_health");
 		cv_Rhp.AddChangeHook(CvarRhp);
 	}
 	if(cv_Siammoregain != null){
 		cv_Siammoregain.AddChangeHook(CvarAmmo);
-	}else if(FindConVar("ss_siammoregain")){
+	}
+	else if(FindConVar("ss_siammoregain")){
 		cv_Siammoregain = FindConVar("ss_siammoregain");
 		cv_Siammoregain.AddChangeHook(CvarAmmo);
 	}
 	if(cv_Restore != null){
 		cv_Restore.AddChangeHook(CvarRestore);
-	}else if(FindConVar("l4d2_restore_health_flag")){
+	}
+	else if(FindConVar("l4d2_restore_health_flag")){
 		cv_Restore = FindConVar("l4d2_restore_health_flag");
 		cv_Restore.AddChangeHook(CvarRestore);
+	}
+	if(cv_Kits != null && cv_Pills != null){
+		cv_Kits.AddChangeHook(CvarMedical);
+		cv_Pills.AddChangeHook(CvarMedical);
+	}
+	else if(FindConVar("l4d2_multi_medical_kits") && FindConVar("l4d2_multi_medical_pills")){
+		cv_Kits = FindConVar("l4d2_multi_medical_kits");
+		cv_Pills = FindConVar("l4d2_multi_medical_pills");
+		cv_Kits.AddChangeHook(CvarMedical);
+		cv_Pills.AddChangeHook(CvarMedical);
+	}
+	if(cv_Respawn != null){
+		cv_Respawn.AddChangeHook(CvarRespawn);
+	}
+	else if(FindConVar("l4d2_respawn_number")){
+		cv_Respawn = FindConVar("l4d2_respawn_number");
+		cv_Respawn.AddChangeHook(CvarRespawn);
 	}
 }
 
@@ -106,19 +135,34 @@ public void CvarAmmo( ConVar convar, const char[] oldValue, const char[] newValu
 {
 	Siammoregain = GetConVarInt(cv_Siammoregain);
 }
+public void CvarMedical( ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	Kits = GetConVarInt(cv_Kits);
+	Pills = GetConVarInt(cv_Pills);
+}
+public void CvarRespawn( ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	Respawn = GetConVarInt(cv_Respawn);
+}
 
 void printinfo(int client = 0, bool All = true){
 	char buffer[256];
+	char buffer2[256];
 	
 	Format(buffer, sizeof(buffer), "\x03武器\x05[\x04%s\x05]", Weapon == 0?"Zone":(Weapon == 1?"Anne":"Anne+"));
 	Format(buffer, sizeof(buffer), "%s \x03回血\x05[\x04%s\x05]", buffer, Rhp > 0?"开启":"关闭");
 	Format(buffer, sizeof(buffer), "%s \x03回弹\x05[\x04%s\x05]", buffer, Siammoregain == 0?"关闭":"开启");
-	Format(buffer, sizeof(buffer), "%s \x03过关满血\x05[\x04%s\x05]", buffer, Restore == 0?"关闭":"开启");
+	Format(buffer, sizeof(buffer), "%s \x03复活\x05[\x04%s\x05]", buffer, Respawn == 0?"关闭":"开启");
+
+	Format(buffer2, sizeof(buffer2), "\x03过关满血\x05[\x04%s\x05]", Restore == 0?"关闭":"开启");
+	Format(buffer2, sizeof(buffer2), "%s \x03医疗倍数\x05[\x04%s\x05]", buffer2, Kits > 1 || Pills > 1?"开启":"关闭");
 	if(All){
 		PrintToChatAll(buffer);
+		PrintToChatAll(buffer2);
 	}else
 	{
 		PrintToChat(client, buffer);
+		PrintToChat(client, buffer2);
 	}
 }
 
