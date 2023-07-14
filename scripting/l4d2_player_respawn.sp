@@ -13,7 +13,7 @@ public Plugin myinfo =
 	name = "[L4D2]复活",
 	author = "奈",
 	description = "生还死亡后复活",
-	version = "1.0.6",
+	version = "1.0.7",
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop"
 };
 
@@ -69,7 +69,7 @@ public Action Event_player_death(Event event, const char[] name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-public Action Timer_RespawnPlayer(Handle timer, any client)
+public Action Timer_RespawnPlayer(Handle timer, int client)
 {
 	RespawnTime[client]--;
 	if (RespawnTime[client] > 0 && Reset[client])

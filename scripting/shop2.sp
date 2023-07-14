@@ -28,7 +28,7 @@ public Plugin myinfo =
 	name = "[L4D2]Shop", 
 	author = "奈", 
 	description = "商店(数据库版本)", 
-	version = "1.1.4", 
+	version = "1.1.5", 
 	url = "https://github.com/NanakaNeko/l4d2_plugins_coop" 
 }
 
@@ -305,7 +305,7 @@ public Action ShowMenu(int client, int args)
 	if( !NoValidPlayer(client) && GetClientTeam(client) == 2 )
 	{
 		Menu menu = new Menu(ShowMenuDetail);
-		menu.SetTitle("商店菜单\n---------------");
+		menu.SetTitle("商店菜单\n——————");
 		menu.AddItem("gun", "白嫖武器");
 		menu.AddItem("melee", "白嫖近战");
 		menu.AddItem("meleeSelect", "出门近战");
@@ -357,7 +357,7 @@ public int ShowMenuDetail(Menu menu, MenuAction action, int client, int num)
 public void WeaponMenu(int client) 
 {
 	Menu menu = new Menu(WeaponMenu_back);
-	menu.SetTitle("白嫖武器(剩余:%d次)\n---------------------------",SURPLUS(client));
+	menu.SetTitle("白嫖武器(剩余:%d次)\n——————————",SURPLUS(client));
 	menu.AddItem("weapon1", "铁喷");
 	menu.AddItem("weapon2", "木喷");
 	menu.AddItem("weapon3", "消音冲锋枪");
@@ -419,7 +419,7 @@ public int WeaponMenu_back(Menu menu, MenuAction action, int client, int num)
 public void MeleeMenu(int client) 
 { 
 	Menu menu = new Menu(MeleeMenu_back);
-	menu.SetTitle("白嫖近战(剩余:%d次)\n---------------------------",SURPLUS(client));
+	menu.SetTitle("白嫖近战(剩余:%d次)\n——————————",SURPLUS(client));
 	menu.AddItem("melee1", "砍刀");
 	menu.AddItem("melee2", "消防斧");
 	menu.AddItem("melee3", "小刀");
@@ -512,7 +512,7 @@ void PrintWeaponName(int client, int i, bool isWeapon = true)
 public void MedicalMenu(int client) 
 {
 	Menu menu = new Menu(MedicalMenu_back);
-	menu.SetTitle("点数(剩余:%d)\n---------------------", player[client].ClientPoint);
+	menu.SetTitle("点数(剩余:%d)\n————————", player[client].ClientPoint);
 	menu.AddItem("pain_pills", "止痛药(1点)");
 	menu.AddItem("adrenaline", "肾上腺素(1点)");
 	menu.AddItem("first_aid_kit", "医疗包(2点)");
@@ -619,7 +619,7 @@ void PrintMedicalName(int client, int i)
 public void ThrowMenu(int client) 
 {
 	Menu menu = new Menu(ThrowMenu_back);
-	menu.SetTitle("点数(剩余:%d)\n---------------------", player[client].ClientPoint);
+	menu.SetTitle("点数(剩余:%d)\n————————", player[client].ClientPoint);
 	menu.AddItem("molotov", "燃烧瓶(1点)");
 	menu.AddItem("pipe_bomb", "土制炸弹(1点)");
 	menu.AddItem("vomitjar", "胆汁(1点)");
@@ -678,7 +678,7 @@ public void MeleeSelect(int client)
 	if( !NoValidPlayer(client) && GetClientTeam(client) == 2 )
 	{
 		Menu menu = new Menu(MeleeSelect_back);
-		menu.SetTitle("选择出门近战,当前为%s\n---------------------------",MeleeName[player[client].ClientMelee]);
+		menu.SetTitle("选择出门近战,当前为%s\n——————————————",MeleeName[player[client].ClientMelee]);
 		menu.AddItem("none", "清除武器");
 		menu.AddItem("machete", "砍刀");
 		menu.AddItem("fireaxe", "消防斧");
